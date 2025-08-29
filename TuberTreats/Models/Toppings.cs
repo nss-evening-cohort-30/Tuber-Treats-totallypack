@@ -3,18 +3,14 @@ using System.Text.Json.Serialization;
 
 namespace TuberTreats.Models;
 
-public class Customer
+public class Topping
 {
     public int Id { get; set; }
 
     [Required]
-    [MaxLength(100)]
+    [MaxLength(50)]
     public string Name { get; set; } = string.Empty;
 
-    [Required]
-    [MaxLength(255)]
-    public string Address { get; set; } = string.Empty;
-
     // Navigation property - always initialize to prevent null reference exceptions
-    public List<TuberOrder> TuberOrders { get; set; } = new List<TuberOrder>();
+    public List<TuberTopping> TuberToppings { get; set; } = new List<TuberTopping>();
 }
