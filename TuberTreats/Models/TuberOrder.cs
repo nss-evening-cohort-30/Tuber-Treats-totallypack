@@ -1,5 +1,3 @@
-using System.ComponentModel.DataAnnotations;
-
 namespace TuberTreats.Models;
 
 public class TuberOrder
