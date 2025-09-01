@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace TuberTreats.Models;
 
 public class TuberOrder
@@ -7,12 +9,10 @@ public class TuberOrder
     public int CustomerId { get; set; }
     public int? TuberDriverId { get; set; }
     public DateTime? DeliveredOnDate { get; set; }
-
     public Customer Customer { get; set; }
     public TuberDriver TuberDriver { get; set; }
     public List<TuberTopping> TuberToppings { get; set; } = [];
-
-    // THIS is where the Toppings property should be:
+    
     private List<Topping> _toppings = null;
 
     public List<Topping> Toppings

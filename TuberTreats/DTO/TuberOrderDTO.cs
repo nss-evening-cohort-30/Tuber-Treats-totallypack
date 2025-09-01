@@ -1,5 +1,3 @@
-using TuberTreats.Models;
-
 namespace TuberTreats.DTO;
 
 public class TuberOrderDTO
@@ -8,7 +6,7 @@ public class TuberOrderDTO
   public List<int> ToppingId { get; set; } = [];
 }
 
-// DTO for creating a new order (request body)
+// DTO for creating a new order
 public class CreateOrderRequest
 {
   public int WheelId { get; set; }
