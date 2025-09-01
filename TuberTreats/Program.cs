@@ -117,7 +117,7 @@ TuberOrder PopulateOrderData(TuberOrder order)
     }
 
     // Add tuber toppings with topping data
-    populatedOrder.TuberToppings = tuberToppings
+    populatedOrder.TuberToppings = [.. tuberToppings
         .Where(tt => tt.TuberOrderId == order.Id)
         .Select(tt => new TuberTopping
         {
@@ -125,7 +125,7 @@ TuberOrder PopulateOrderData(TuberOrder order)
             TuberOrderId = tt.TuberOrderId,
             ToppingId = tt.ToppingId,
             Topping = toppings.FirstOrDefault(t => t.Id == tt.ToppingId)
-        }).ToList();
+        })];
 
     return populatedOrder;
 }
@@ -243,10 +243,9 @@ app.MapGet("/customers", () =>
         Id = c.Id,
         Name = c.Name,
         Address = c.Address,
-        TuberOrders = orders
+        TuberOrders = [.. orders
             .Where(o => o.CustomerId == c.Id)
-            .Select(PopulateOrderData)
-            .ToList()
+            .Select(PopulateOrderData)]
     }).ToList();
 });
 
@@ -261,10 +260,9 @@ app.MapGet("/customers/{id}", (int id) =>
         Id = customer.Id,
         Name = customer.Name,
         Address = customer.Address,
-        TuberOrders = orders
+        TuberOrders = [.. orders
             .Where(o => o.CustomerId == customer.Id)
-            .Select(PopulateOrderData)
-            .ToList()
+            .Select(PopulateOrderData)]
     };
     
     return Results.Ok(customerResult);
@@ -299,10 +297,9 @@ app.MapGet("/tuberdrivers", () =>
     {
         Id = d.Id,
         Name = d.Name,
-        TuberDeliveries = orders
+        TuberDeliveries = [.. orders
             .Where(o => o.TuberDriverId == d.Id)
-            .Select(PopulateOrderData)
-            .ToList()
+            .Select(PopulateOrderData)]
     }).ToList();
 });
 
@@ -316,10 +313,9 @@ app.MapGet("/tuberdrivers/{id}", (int id) =>
     {
         Id = driver.Id,
         Name = driver.Name,
-        TuberDeliveries = orders
+        TuberDeliveries = [.. orders
             .Where(o => o.TuberDriverId == driver.Id)
-            .Select(PopulateOrderData)
-            .ToList()
+            .Select(PopulateOrderData)]
     };
     
     return Results.Ok(driverResult);
