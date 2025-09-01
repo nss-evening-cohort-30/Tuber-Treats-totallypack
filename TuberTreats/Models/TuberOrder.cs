@@ -1,5 +1,3 @@
-using System.ComponentModel.DataAnnotations;
-
 namespace TuberTreats.Models;
 
 public class TuberOrder
@@ -9,13 +7,11 @@ public class TuberOrder
     public int CustomerId { get; set; }
     public int? TuberDriverId { get; set; }
     public DateTime? DeliveredOnDate { get; set; }
-
-    public Customer? Customer { get; set; }
-    public TuberDriver? TuberDriver { get; set; }
-    public List<TuberTopping> TuberToppings { get; set; } = new List<TuberTopping>();
-
-    // THIS is where the Toppings property should be:
-    private List<Topping>? _toppings = null;
+    public Customer Customer { get; set; }
+    public TuberDriver TuberDriver { get; set; }
+    public List<TuberTopping> TuberToppings { get; set; } = [];
+    
+    private List<Topping> _toppings = null;
 
     public List<Topping> Toppings
     {
@@ -26,16 +22,15 @@ public class TuberOrder
                 return _toppings;
             }
 
-            if (TuberToppings == null || !TuberToppings.Any())
+            if (TuberToppings == null || TuberToppings.Count == 0)
             {
-                _toppings = new List<Topping>();
+                _toppings = [];
                 return _toppings;
             }
 
-            _toppings = TuberToppings
+            _toppings = [.. TuberToppings
                 .Where(tt => tt.Topping != null)
-                .Select(tt => tt.Topping!)
-                .ToList();
+                .Select(tt => tt.Topping!)];
 
             return _toppings;
         }

@@ -1,36 +1,61 @@
-using Microsoft.EntityFrameworkCore;
-using TuberTreats.Data;
 using System.Text.Json.Serialization;
-using System.Text.Json;
+using TuberTreats.DTO;
+using TuberTreats.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
-builder.Services.AddControllers()
-    .AddJsonOptions(options =>
-    {
-        // Fix circular reference issues
-        options.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
-        options.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
-    });
+List<Customer> customers =
+[
+    new Customer { Id = 1, Name = "John Doe", Address = "123 Main St" },
+    new Customer { Id = 2, Name = "Jane Smith", Address = "456 Oak Ave" },
+    new Customer { Id = 3, Name = "Bob Johnson", Address = "789 Pine Rd" },
+    new Customer { Id = 4, Name = "Alice Brown", Address = "321 Elm St" },
+    new Customer { Id = 5, Name = "Charlie Davis", Address = "654 Maple Dr" }
+];
 
-// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
+List<TuberDriver> drivers =
+[
+    new TuberDriver { Id = 1, Name = "Frank Miller" },
+    new TuberDriver { Id = 2, Name = "Grace Lee" },
+    new TuberDriver { Id = 3, Name = "Henry Adams" }
+];
+
+List<TuberOrder> orders =
+[
+    new TuberOrder { Id = 1, OrderPlacedOnDate = DateTime.Now.AddDays(-2), CustomerId = 1, TuberDriverId = 1 },
+    new TuberOrder { Id = 2, OrderPlacedOnDate = DateTime.Now.AddDays(-1), CustomerId = 2, TuberDriverId = 2, DeliveredOnDate = DateTime.Now.AddHours(-2) },
+    new TuberOrder { Id = 3, OrderPlacedOnDate = DateTime.Now.AddHours(-3), CustomerId = 3 }
+];
+
+List<Topping> toppings =
+[
+    new Topping { Id = 1, Name = "Butter" },
+    new Topping { Id = 2, Name = "Sour Cream" },
+    new Topping { Id = 3, Name = "Chives" },
+    new Topping { Id = 4, Name = "Bacon Bits" },
+    new Topping { Id = 5, Name = "Cheese" }
+];
+
+List<TuberTopping> tuberToppings =
+[
+    new TuberTopping { Id = 1, TuberOrderId = 1, ToppingId = 1 },
+    new TuberTopping { Id = 2, TuberOrderId = 1, ToppingId = 2 },
+    new TuberTopping { Id = 3, TuberOrderId = 2, ToppingId = 3 },
+    new TuberTopping { Id = 4, TuberOrderId = 2, ToppingId = 4 },
+    new TuberTopping { Id = 5, TuberOrderId = 3, ToppingId = 5 }
+];
+
+// Add services to the container.
+builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+builder.Services.AddCors();
 
-// Add DbContext with InMemory database for testing
-builder.Services.AddDbContext<TuberTreatsDbContext>(options =>
+// Configure JSON options for .NET 8
+builder.Services.ConfigureHttpJsonOptions(options =>
 {
-    if (builder.Environment.IsDevelopment())
-    {
-        // Use InMemory database for development and testing
-        options.UseInMemoryDatabase("TuberTreatsDb");
-    }
-    else
-    {
-        // Use SQL Server for production (if needed)
-        options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection"));
-    }
+    options.SerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
+    options.SerializerOptions.WriteIndented = true;
 });
 
 var app = builder.Build();
@@ -40,82 +65,263 @@ if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
+    app.UseCors(options =>
+    {
+        options.AllowAnyOrigin();
+        options.AllowAnyMethod();
+        options.AllowAnyHeader();
+    });
 }
 
 app.UseHttpsRedirection();
+app.UseAuthorization();
 
-app.MapControllers();
-
-// Seed the database
-using (var scope = app.Services.CreateScope())
+// Helper method to populate order with related data
+TuberOrder PopulateOrderData(TuberOrder order)
 {
-    var context = scope.ServiceProvider.GetRequiredService<TuberTreatsDbContext>();
-    SeedData(context);
+    var populatedOrder = new TuberOrder
+    {
+        Id = order.Id,
+        OrderPlacedOnDate = order.OrderPlacedOnDate,
+        CustomerId = order.CustomerId,
+        TuberDriverId = order.TuberDriverId,
+        DeliveredOnDate = order.DeliveredOnDate
+    };
+
+    // Add customer without circular reference
+    var customer = customers.FirstOrDefault(c => c.Id == order.CustomerId);
+    if (customer != null)
+    {
+        populatedOrder.Customer = new Customer
+        {
+            Id = customer.Id,
+            Name = customer.Name,
+            Address = customer.Address,
+            TuberOrders = [] // Empty to avoid circular reference
+        };
+    }
+
+    // Add driver without circular reference
+    if (order.TuberDriverId.HasValue)
+    {
+        var driver = drivers.FirstOrDefault(d => d.Id == order.TuberDriverId.Value);
+        if (driver != null)
+        {
+            populatedOrder.TuberDriver = new TuberDriver
+            {
+                Id = driver.Id,
+                Name = driver.Name,
+                TuberDeliveries = [] // Empty to avoid circular reference
+            };
+        }
+    }
+
+    // Add tuber toppings with topping data
+    populatedOrder.TuberToppings = [.. tuberToppings
+        .Where(tt => tt.TuberOrderId == order.Id)
+        .Select(tt => new TuberTopping
+        {
+            Id = tt.Id,
+            TuberOrderId = tt.TuberOrderId,
+            ToppingId = tt.ToppingId,
+            Topping = toppings.FirstOrDefault(t => t.Id == tt.ToppingId)
+        })];
+
+    return populatedOrder;
 }
+
+// TUBER ORDERS ENDPOINTS
+// Get all orders
+app.MapGet("/tuberorders", () =>
+{
+    return orders.Select(PopulateOrderData).ToList();
+});
+
+// Get order by id
+app.MapGet("/tuberorders/{id}", (int id) =>
+{
+    var order = orders.FirstOrDefault(o => o.Id == id);
+    if (order == null) return Results.NotFound();
+    return Results.Ok(PopulateOrderData(order));
+});
+
+// Create new order
+app.MapPost("/tuberorders", (TuberOrder newOrder) =>
+{
+    int newId = orders.Count > 0 ? orders.Max(o => o.Id) + 1 : 1;
+    
+    newOrder.Id = newId;
+    newOrder.OrderPlacedOnDate = DateTime.Now;
+    
+    orders.Add(newOrder);
+    
+    return PopulateOrderData(newOrder);
+});
+
+// Update order (assign driver)
+app.MapPut("/tuberorders/{id}", (int id, TuberOrder updatedOrder) =>
+{
+    var order = orders.FirstOrDefault(o => o.Id == id);
+    if (order == null) return Results.NotFound();
+    
+    order.TuberDriverId = updatedOrder.TuberDriverId;
+    order.CustomerId = updatedOrder.CustomerId;
+    
+    return Results.Ok(PopulateOrderData(order));
+});
+
+// Complete order
+app.MapPost("/tuberorders/{id}/complete", (int id) =>
+{
+    var order = orders.FirstOrDefault(o => o.Id == id);
+    if (order == null) return Results.NotFound();
+    
+    order.DeliveredOnDate = DateTime.Now;
+    
+    return Results.Ok(PopulateOrderData(order));
+});
+
+// TOPPINGS ENDPOINTS
+// Get all toppings
+app.MapGet("/toppings", () =>
+{
+    return toppings.Select(t => new Topping { Id = t.Id, Name = t.Name }).ToList();
+});
+
+// Get topping by id
+app.MapGet("/toppings/{id}", (int id) =>
+{
+    var topping = toppings.FirstOrDefault(t => t.Id == id);
+    if (topping == null) return Results.NotFound();
+    return Results.Ok(new Topping { Id = topping.Id, Name = topping.Name });
+});
+
+// TUBER TOPPINGS ENDPOINTS
+// Get all tuber toppings
+app.MapGet("/tubertoppings", () =>
+{
+    return tuberToppings.Select(tt => new TuberTopping 
+    { 
+        Id = tt.Id, 
+        TuberOrderId = tt.TuberOrderId, 
+        ToppingId = tt.ToppingId 
+    }).ToList();
+});
+
+// Add topping to order
+app.MapPost("/tubertoppings", (TuberTopping newTuberTopping) =>
+{
+    int newId = tuberToppings.Count > 0 ? tuberToppings.Max(tt => tt.Id) + 1 : 1;
+    
+    newTuberTopping.Id = newId;
+    tuberToppings.Add(newTuberTopping);
+    
+    return new TuberTopping 
+    { 
+        Id = newTuberTopping.Id, 
+        TuberOrderId = newTuberTopping.TuberOrderId, 
+        ToppingId = newTuberTopping.ToppingId 
+    };
+});
+
+// Remove topping from order
+app.MapDelete("/tubertoppings/{id}", (int id) =>
+{
+    var tuberTopping = tuberToppings.FirstOrDefault(tt => tt.Id == id);
+    if (tuberTopping == null) return Results.NotFound();
+    
+    tuberToppings.Remove(tuberTopping);
+    return Results.Ok();
+});
+
+// CUSTOMERS ENDPOINTS
+// Get all customers
+app.MapGet("/customers", () =>
+{
+    return customers.Select(c => new Customer
+    {
+        Id = c.Id,
+        Name = c.Name,
+        Address = c.Address,
+        TuberOrders = [.. orders
+            .Where(o => o.CustomerId == c.Id)
+            .Select(PopulateOrderData)]
+    }).ToList();
+});
+
+// Get customer by id with orders
+app.MapGet("/customers/{id}", (int id) =>
+{
+    var customer = customers.FirstOrDefault(c => c.Id == id);
+    if (customer == null) return Results.NotFound();
+    
+    var customerResult = new Customer
+    {
+        Id = customer.Id,
+        Name = customer.Name,
+        Address = customer.Address,
+        TuberOrders = [.. orders
+            .Where(o => o.CustomerId == customer.Id)
+            .Select(PopulateOrderData)]
+    };
+    
+    return Results.Ok(customerResult);
+});
+
+// Add customer
+app.MapPost("/customers", (Customer newCustomer) =>
+{
+    int newId = customers.Count > 0 ? customers.Max(c => c.Id) + 1 : 1;
+    
+    newCustomer.Id = newId;
+    customers.Add(newCustomer);
+    
+    return new Customer { Id = newCustomer.Id, Name = newCustomer.Name, Address = newCustomer.Address };
+});
+
+// Delete customer
+app.MapDelete("/customers/{id}", (int id) =>
+{
+    var customer = customers.FirstOrDefault(c => c.Id == id);
+    if (customer == null) return Results.NotFound();
+    
+    customers.Remove(customer);
+    return Results.Ok();
+});
+
+// TUBER DRIVERS ENDPOINTS
+// Get all drivers
+app.MapGet("/tuberdrivers", () =>
+{
+    return drivers.Select(d => new TuberDriver
+    {
+        Id = d.Id,
+        Name = d.Name,
+        TuberDeliveries = [.. orders
+            .Where(o => o.TuberDriverId == d.Id)
+            .Select(PopulateOrderData)]
+    }).ToList();
+});
+
+// Get driver by id with deliveries
+app.MapGet("/tuberdrivers/{id}", (int id) =>
+{
+    var driver = drivers.FirstOrDefault(d => d.Id == id);
+    if (driver == null) return Results.NotFound();
+    
+    var driverResult = new TuberDriver
+    {
+        Id = driver.Id,
+        Name = driver.Name,
+        TuberDeliveries = [.. orders
+            .Where(o => o.TuberDriverId == driver.Id)
+            .Select(PopulateOrderData)]
+    };
+    
+    return Results.Ok(driverResult);
+});
 
 app.Run();
 
-static void SeedData(TuberTreatsDbContext context)
-{
-    // Only seed if database is empty
-    if (context.Customers.Any())
-        return;
-
-    // Seed data here - this will be called once when app starts
-    context.Database.EnsureCreated();
-    
-    // Add seed data (same as before)
-    var customers = new[]
-    {
-        new TuberTreats.Models.Customer { Name = "Alice Johnson", Address = "123 Main St, Anytown, USA" },
-        new TuberTreats.Models.Customer { Name = "Bob Smith", Address = "456 Oak Ave, Somewhere, USA" },
-        new TuberTreats.Models.Customer { Name = "Carol Davis", Address = "789 Pine Rd, Elsewhere, USA" },
-        new TuberTreats.Models.Customer { Name = "Dave Wilson", Address = "321 Elm St, Nowhere, USA" },
-        new TuberTreats.Models.Customer { Name = "Eve Brown", Address = "654 Maple Dr, Anywhere, USA" }
-    };
-    context.Customers.AddRange(customers);
-    context.SaveChanges();
-
-    var drivers = new[]
-    {
-        new TuberTreats.Models.TuberDriver { Name = "Frank Miller" },
-        new TuberTreats.Models.TuberDriver { Name = "Grace Lee" },
-        new TuberTreats.Models.TuberDriver { Name = "Henry Adams" }
-    };
-    context.TuberDrivers.AddRange(drivers);
-    context.SaveChanges();
-
-    var toppings = new[]
-    {
-        new TuberTreats.Models.Topping { Name = "Butter" },
-        new TuberTreats.Models.Topping { Name = "Sour Cream" },
-        new TuberTreats.Models.Topping { Name = "Chives" },
-        new TuberTreats.Models.Topping { Name = "Bacon Bits" },
-        new TuberTreats.Models.Topping { Name = "Cheese" }
-    };
-    context.Toppings.AddRange(toppings);
-    context.SaveChanges();
-
-    var orders = new[]
-    {
-        new TuberTreats.Models.TuberOrder { OrderPlacedOnDate = DateTime.Now.AddDays(-2), CustomerId = 1, TuberDriverId = 1 },
-        new TuberTreats.Models.TuberOrder { OrderPlacedOnDate = DateTime.Now.AddDays(-1), CustomerId = 2, TuberDriverId = 2, DeliveredOnDate = DateTime.Now.AddHours(-2) },
-        new TuberTreats.Models.TuberOrder { OrderPlacedOnDate = DateTime.Now.AddHours(-3), CustomerId = 3 }
-    };
-    context.TuberOrders.AddRange(orders);
-    context.SaveChanges();
-
-    var tuberToppings = new[]
-    {
-        new TuberTreats.Models.TuberTopping { TuberOrderId = 1, ToppingId = 1 },
-        new TuberTreats.Models.TuberTopping { TuberOrderId = 1, ToppingId = 2 },
-        new TuberTreats.Models.TuberTopping { TuberOrderId = 2, ToppingId = 3 },
-        new TuberTreats.Models.TuberTopping { TuberOrderId = 2, ToppingId = 4 },
-        new TuberTreats.Models.TuberTopping { TuberOrderId = 3, ToppingId = 5 }
-    };
-    context.TuberToppings.AddRange(tuberToppings);
-    context.SaveChanges();
-}
-
-// Make the implicit Program class public for testing
+//don't touch or move this!
 public partial class Program { }
